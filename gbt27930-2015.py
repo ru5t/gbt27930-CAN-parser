@@ -13,7 +13,6 @@ mul_frame_num = None
 mul_frame_byte = None
 mul_frame_first = None
 
-
 def format_data(data):
     data = data.split(" ")[-1]
     data = data.split("#")
@@ -21,26 +20,25 @@ def format_data(data):
     cd = data[-1]
     return ci, cd
 
-
 def get_pgn(ci):
     p = "00" + ci[2:4] + "00"
     p = int(p, 16)
     return str(p)
-
+    #return f"0x {ci[2:4]}"
 
 def orientation(ci):
     da = ci[4:6]
     sa = ci[6:]
     if sa in addr:
         if sa == addr[0]:
-            sa = "充电机"
+            sa = "Charger"
         else:
             sa = "BMS"
     else:
         sa = "???"
     if da in addr:
         if da == addr[0]:
-            da = "充电机"
+            da = "Charger"
         else:
             da = "BMS"
     else:
@@ -48,121 +46,118 @@ def orientation(ci):
 
     return f"{sa}-{da}\t"
 
-
 def pgn_message(p, pj):
     m = ""
     if p in pj:
         for k in pj[p]:
             m += f"{pj[p][k]}\t"
-        return m
-
+    return m
 
 def pgn_content(p, cd):
-    # print(p, cd)
     c = ""
     with open("SPN.json", "r", encoding="utf-8") as f:
         spn_json = json.load(f)
     for sl in spn_json[p]:
         if sl["process_mode"] == "select":
-            if isinstance(sl["起始字节或位"], int):
-                d = cd[(sl["起始字节或位"] - 1) * 2:(sl["起始字节或位"] + sl["长度"] - 1) * 2]
+            if isinstance(sl["start_byte_or_bit"], int):
+                d = cd[(sl["start_byte_or_bit"] - 1) * 2:(sl["start_byte_or_bit"] + sl["length"] - 1) * 2]
                 if d:
                     d = (bytes.fromhex(d)[::-1].hex()).upper()
-                    c += f'{sl["content"][sl["definition_data"].index(d)]}；'
+                    if d in sl["definition_data"]:
+                        c += f'{sl["content"][sl["definition_data"].index(d)]};'
             else:
-                if sl["长度"] >= 8:
-                    if sl["长度"] % 8 == 0:
-                        n = int(sl["长度"] / 8 + sl["起始字节或位"])
+                if sl["length"] >= 8:
+                    if sl["length"] % 8 == 0:
+                        n = int(sl["length"] / 8 + sl["start_byte_or_bit"])
                     else:
-                        n = int(sl["长度"] / 8 + sl["起始字节或位"]) + 1
+                        n = int(sl["length"] / 8 + sl["start_byte_or_bit"]) + 1
                 else:
-                    n = int(sl["起始字节或位"])
-                d = cd[int(sl["起始字节或位"] - 1) * 2:n * 2]
+                    n = int(sl["start_byte_or_bit"])
+                d = cd[int(sl["start_byte_or_bit"] - 1) * 2:n * 2]
                 if d:
                     d = (bytes.fromhex(d)[::-1].hex()).upper()
-                    db = bin(int(binascii.hexlify(bytes.fromhex(d)), 16))[2:].zfill(8 * (n - int(sl["起始字节或位"]) + 1))
-                    sb = int(str(sl["起始字节或位"]).split('.')[1]) - 1
-                    eb = sb + sl["长度"] + 1
+                    db = bin(int(binascii.hexlify(bytes.fromhex(d)), 16))[2:].zfill(8 * (n - int(sl["start_byte_or_bit"]) + 1))
+                    sb = int(str(sl["start_byte_or_bit"]).split('.')[1]) - 1
+                    eb = sb + sl["length"] + 1
                     if sb == 0:
                         eb = eb - 1
                     section = db[sb:eb]
                     try:
                         c += f'{sl["content"][sl["definition_data"].index(section)]}; '
                     except ValueError:
-                        c += f'解析出错标准无{section}所代表的含义；'
+                        c += f'Parsing error: standard does not define meaning for {section};'
         elif sl["process_mode"] == "ascii":
-            if isinstance(sl["起始字节或位"], int):
-                d = cd[(sl["起始字节或位"] - 1) * 2:(sl["起始字节或位"] + sl["长度"] - 1) * 2]
+            if isinstance(sl["start_byte_or_bit"], int):
+                d = cd[(sl["start_byte_or_bit"] - 1) * 2:(sl["start_byte_or_bit"] + sl["length"] - 1) * 2]
                 if d:
                     ascii_string = ''.join(chr(int(d[i:i + 2], 16)) for i in range(0, len(d), 2))
-                    c += f'{sl["content"]}{ascii_string}；'
+                    c += f'{sl["content"]}{ascii_string};'
         elif sl["process_mode"] == "calculate":
-            if isinstance(sl["起始字节或位"], int):
-                d = cd[(sl["起始字节或位"] - 1) * 2:(sl["起始字节或位"] + sl["长度"] - 1) * 2]
+            if isinstance(sl["start_byte_or_bit"], int):
+                d = cd[(sl["start_byte_or_bit"] - 1) * 2:(sl["start_byte_or_bit"] + sl["length"] - 1) * 2]
                 if d:
                     d = (bytes.fromhex(d)[::-1].hex()).upper()
                     result = Decimal(str(sl["data_resolution"])) * Decimal(int(d, 16)) + sl["offset"]
                     if result < 0:
                         result = abs(result)
-                    c += f'{sl["content"]}{result}{sl["units"]}；'
+                    c += f'{sl["content"]}{result}{sl["units"]};'
             else:
-                if sl["长度"] >= 8:
-                    if sl["长度"] % 8 == 0:
-                        n = int(sl["长度"] / 8 + sl["起始字节或位"])
+                if sl["length"] >= 8:
+                    if sl["length"] % 8 == 0:
+                        n = int(sl["length"] / 8 + sl["start_byte_or_bit"])
                     else:
-                        n = int(sl["长度"] / 8 + sl["起始字节或位"])
+                        n = int(sl["length"] / 8 + sl["start_byte_or_bit"])
                 else:
-                    n = int(sl["起始字节或位"])
-                d = cd[int(sl["起始字节或位"] - 1) * 2:n * 2]
+                    n = int(sl["start_byte_or_bit"])
+                d = cd[int(sl["start_byte_or_bit"] - 1) * 2:n * 2]
                 if d:
-                    db = bin(int(binascii.hexlify(bytes.fromhex(d)), 16))[2:].zfill(8 * (n - int(sl["起始字节或位"]) + 1))
-                    sb = int(str(sl["起始字节或位"]).split('.')[1]) - 1
-                    eb = sb + sl["长度"] + 1
+                    db = bin(int(binascii.hexlify(bytes.fromhex(d)), 16))[2:].zfill(8 * (n - int(sl["start_byte_or_bit"]) + 1))
+                    sb = int(str(sl["start_byte_or_bit"]).split('.')[1]) - 1
+                    eb = sb + sl["length"] + 1
                     if sb == 0:
                         eb = eb - 1
                     section = db[sb:eb]
                     result = Decimal(str(sl["data_resolution"])) * Decimal(int(section, 2)) + sl["offset"]
                     if result < 0:
                         result = abs(result)
-                    c += f'{sl["content"]}{result}{sl["units"]}；'
+                    c += f'{sl["content"]}{result}{sl["units"]};'
         elif sl["process_mode"] == "date":
-            if isinstance(sl["起始字节或位"], int):
-                d = cd[(sl["起始字节或位"] - 1) * 2:(sl["起始字节或位"] + sl["长度"] - 1) * 2]
+            if isinstance(sl["start_byte_or_bit"], int):
+                d = cd[(sl["start_byte_or_bit"] - 1) * 2:(sl["start_byte_or_bit"] + sl["length"] - 1) * 2]
                 if d:
                     if sl["SPN"] == "2571":
                         year = int(d[0:2], 16) + 1985
                         month = int(d[2:4], 16)
                         day = int(d[4:6], 16)
-                        c += f'{sl["content"]}{year}年{month}月{day}日；'
+                        c += f'{sl["content"]}{year}-{month:02d}-{day:02d};'
                     elif sl["SPN"] == "2576":
                         year = int((bytes.fromhex(d[4:8])[::-1].hex()).upper(), 16)
                         month = int(d[2:4], 16)
                         day = int(d[0:2], 16)
-                        c += f'{sl["content"]}{year}年{month}月{day}日；'
+                        c += f'{sl["content"]}{year}-{month:02d}-{day:02d};'
                     elif sl["SPN"] == "2823":
-                        year = (bytes.fromhex(d[10:14])[::-1].hex()).upper()  # int(d[10:14], 16)
-                        month = d[8:10]  # int(d[8:10], 16)
-                        day = d[6:8]  # int(d[6:8], 16)
-                        hour = d[4:6]  # int(d[4:6], 16)
-                        minute = d[2:4]  # int(d[2:4], 16)
-                        second = d[0:2]  # int(d[0:2], 16)
-                        c += f'{sl["content"]}{year}年{month}月{day}日{hour}时{minute}分{second}秒；'
+                        year = (bytes.fromhex(d[10:14])[::-1].hex()).upper()
+                        month = d[8:10]
+                        day = d[6:8]
+                        hour = d[4:6]
+                        minute = d[2:4]
+                        second = d[0:2]
+                        c += f'{sl["content"]}{year}-{month}-{day} {hour}:{minute}:{second};'
         elif sl["process_mode"] == "null":
-            if isinstance(sl["起始字节或位"], int):
-                d = cd[(sl["起始字节或位"] - 1) * 2:(sl["起始字节或位"] + sl["长度"] - 1) * 2]
+            if isinstance(sl["start_byte_or_bit"], int):
+                d = cd[(sl["start_byte_or_bit"] - 1) * 2:(sl["start_byte_or_bit"] + sl["length"] - 1) * 2]
                 if d:
-                    c += f'{sl["content"]}，帧数据为{d}；'
+                    c += f'{sl["content"]}, frame data is {d};'
     return c
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="根据GB/T 27930-2015解析candump log或每行为\"can_id#can_data\"的文件")
-    parser.add_argument("-f", "--file", help="指定要处理的文件路径")
+    parser = argparse.ArgumentParser(description="Parse candump log or file with each line as \"can_id#can_data\" according to GB/T 27930-2015")
+    parser.add_argument("-f", "--file", help="Specify the file path to process")
 
     args = parser.parse_args()
 
-    header = ["帧编号", "帧id", "阶段", "PGN", "报文代号", "报文描述", "优先权", "源地址-目的地址", "帧长度", "帧数据",
-              "帧数据含义"]
+    header = ["Frame Number", "Frame ID", "Phase", "PGN", "Message Code", "Message Description", "Priority", "Source Address-Destination Address", "Frame Length", "Frame Data",
+              "Frame Data Meaning"]
     print("\t".join(header))
 
     t = time.strftime('%Y-%m-%d_%H%M%S', time.localtime())
@@ -205,7 +200,7 @@ if __name__ == "__main__":
                             frame_num = str(int(can_data[6:8], 16))
                             mul_frame_byte = byte_num
                             mul_frame_num = frame_num
-                            content = f"多帧发送请求帧, 总字节数为{byte_num}, 需要发送的总帧数为{frame_num}"
+                            content = f"Multi-frame send request frame, total bytes {byte_num}, total frames to send {frame_num}"
                             mc = message + content
 
                             print(mc)
@@ -215,7 +210,7 @@ if __name__ == "__main__":
                             first_frame = can_data[4:6]
                             mul_frame_first = 0
                             mul_frame_pgn = pgn
-                            content = f"多帧请求响应帧, 可发送帧数为{frame_num}, 多帧发送时首帧的帧号为{first_frame}"
+                            content = f"Multi-frame request response frame, sendable frames {frame_num}, first frame number of multi-frame send {first_frame}"
                             mc = message + content
 
                             print(mc)
@@ -223,7 +218,7 @@ if __name__ == "__main__":
                         elif can_data[0:2] == "13":
                             receive_byte_num = int(can_data[2:4], 16)
                             receive_frame_num = int(can_data[6:8], 16)
-                            content = f"多帧接收完成帧, 收到总字节数为{receive_byte_num}, 收到总帧数为{receive_frame_num}；\n多帧解析结果：【"
+                            content = f"Multi-frame receive complete frame, received total bytes {receive_byte_num}, received total frames {receive_frame_num};\nMulti-frame parsing result: 【"
 
                             mul_frame_data = mul_frame_data[0:receive_byte_num * 2]
 
@@ -244,7 +239,7 @@ if __name__ == "__main__":
                             message = f"{str(line_num)}\t0x{can_id}\t"
                             pm = pgn_message(mul_frame_pgn, pgn_json)
                             message += f"{pm}{o}{data_len}0x{can_data}\t"
-                            content = f"多帧发送的第{mul_frame_first}帧"
+                            content = f"Multi-frame send frame #{mul_frame_first}"
                             mc = message + content
 
                             print(mc)
@@ -253,4 +248,4 @@ if __name__ == "__main__":
                         mc = f"{str(line_num)}\t0x{can_id}\t-\t-\t-\t-\t-\t{o}{data_len}0x{can_data}\t-"
                         print(mc)
                         writer.writerow(mc.split("\t"))
-                line_num += 1
+                    line_num += 1
